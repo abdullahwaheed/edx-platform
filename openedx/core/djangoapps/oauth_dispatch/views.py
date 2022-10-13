@@ -117,7 +117,9 @@ class AccessTokenView(_DispatchingView):
         Includes the JWT token and token type in the response.
         """
         opaque_token_dict = json.loads(response.content.decode('utf-8'))
-        jwt_token_dict = create_jwt_token_dict(opaque_token_dict, self.get_adapter(request))
+        use_asymmetric_key = request.POST.get('asymmetric_jwt', False)
+        jwt_token_dict = create_jwt_token_dict(opaque_token_dict, self.get_adapter(request),
+                                               use_asymmetric_key=use_asymmetric_key)
         return json.dumps(jwt_token_dict)
 
 
@@ -133,6 +135,27 @@ class AccessTokenExchangeView(_DispatchingView):
     Exchange a third party auth token.
     """
     dot_view = auth_exchange_views.DOTAccessTokenExchangeView
+
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        token_type = _get_token_type(request)
+
+        if response.status_code == 200 and token_type == 'jwt':
+            response.data = self._get_jwt_data_from_access_token_data(request, response)
+
+        return response
+
+    def _get_jwt_data_from_access_token_data(self, request, response):
+        """
+        Gets the JWT response data from the opaque token response data.
+
+        Includes the JWT token and token type in the response.
+        """
+        opaque_token_dict = response.data
+        use_asymmetric_key = request.POST.get('asymmetric_jwt', False)
+        jwt_token_dict = create_jwt_token_dict(opaque_token_dict, self.get_adapter(request),
+                                               use_asymmetric_key=use_asymmetric_key)
+        return jwt_token_dict
 
 
 class RevokeTokenView(_DispatchingView):
